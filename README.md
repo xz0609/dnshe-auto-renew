@@ -25,22 +25,13 @@
 - `DNSHE_API_KEY`
 - `DNSHE_API_SECRET`
 
-### 第 1 步：用 GitHub Importer 转成私有仓库
+### 第 1 步：Fork 本仓库
 
-1. 登录 GitHub，打开 <https://github.com/new/import>
-2. 按以下信息填写：
+1. 登录 GitHub。
+2. 打开：`https://github.com/xz0609/dnshe-auto-renew`
+3. 点击 `Create fork`，通常几秒到几十秒完成。
 
-| 字段 | 填什么 |
-| --- | --- |
-| `Your old repository's clone URL` | `https://github.com/OUBIGFA/dnshe-auto-renew` |
-| `Owner` | 你的 GitHub 账号 |
-| `Repository name` | 你的仓库名，例如 `my-dnshe-auto-renew` |
-| `Privacy` | 选 `Private` |
-
-3. 点击 `Begin import`，等待导入完成（通常几十秒到几分钟）
-4. 导入完成后，GitHub 会生成一个属于你自己的私有仓库，后续的 Secrets、Variables 和 workflow 都在这个仓库里设置
-
-### 第 2 步：添加 GitHub Secrets 和 Variable
+### 第 2 步：添加 GitHub Secrets
 
 进入：
 
@@ -50,9 +41,6 @@
 
 - `DNSHE_API_KEY`
 - `DNSHE_API_SECRET`
-
-添加 Variable：
-
 - `DNSHE_DOMAINS`
 
 ### 第 3 步：配置域名
@@ -68,7 +56,7 @@ abc88.cc.cd
 
 打开 GitHub 的 `Actions`，手动运行 `DNSHE Auto Renew`。
 
-第一次运行会检查域名并生成 `state/domains-state.json`。之后工作流每周自动运行一次。
+第一次运行会检查域名。之后工作流每周自动运行一次。
 
 ## 域名管理
 
@@ -84,13 +72,12 @@ abc88.cc.cd
 
 ### 新增域名
 
-只需把新域名追加到 `DNSHE_DOMAINS`。下一次 workflow 运行时，会自动发现新域名、从 API 读取 `created_at`，自动计算初始到期时间（`created_at + 365` 天），将结果写入 `state/domains-state.json`。不需要手动填注册时间或到期时间。
+只需把新域名追加到 `DNSHE_DOMAINS`。下一次 workflow 运行时，会自动发现新域名、从 API 读取 `created_at`，自动计算初始到期时间（`created_at + 365` 天）。不需要手动填注册时间或到期时间。
 
 ### 为什么不用手填到期时间
 
-- 第一次发现域名时，用 `created_at + 365` 天推算初始到期时间
-- 续期成功后，用 API 返回的 `new_expires_at` 更新状态
-- 后续自动滚动计算，不需要每年改日期
+- 每次运行时，用 `created_at + 365` 天推算到期时间
+- 不需要手动填注册时间或到期时间
 
 ## 续期规则
 
@@ -115,7 +102,6 @@ abc88.cc.cd
 
 - `scripts/dnshe_auto_renew.py`：续期脚本
 - `.github/workflows/dnshe-auto-renew.yml`：每周 GitHub Actions 工作流
-- `state/domains-state.json`：运行后自动生成的状态文件
 
 ## 官方文档
 

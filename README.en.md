@@ -25,22 +25,13 @@ Prepare these two values:
 - `DNSHE_API_KEY`
 - `DNSHE_API_SECRET`
 
-### Step 1: Import as a Private Repository via GitHub Importer
+### Step 1: Fork This Repository
 
-1. Log in to GitHub and open <https://github.com/new/import>
-2. Fill in the following:
+1. Log in to GitHub.
+2. Open: `https://github.com/xz0609/dnshe-auto-renew`
+3. Click `Create fork` — usually done in a few seconds to tens of seconds.
 
-| Field | Value |
-| --- | --- |
-| `Your old repository's clone URL` | `https://github.com/OUBIGFA/dnshe-auto-renew` |
-| `Owner` | Your GitHub account |
-| `Repository name` | Your repo name, e.g. `my-dnshe-auto-renew` |
-| `Privacy` | Select `Private` |
-
-3. Click `Begin import` and wait for it to finish (usually tens of seconds to a few minutes)
-4. Once imported, GitHub creates a private repository owned by you. All subsequent Secrets, Variables, and workflow configuration are done on this repo's page.
-
-### Step 2: Add GitHub Secrets and Variables
+### Step 2: Add GitHub Secrets
 
 Go to:
 
@@ -50,9 +41,6 @@ Add these Secrets:
 
 - `DNSHE_API_KEY`
 - `DNSHE_API_SECRET`
-
-Add this Variable:
-
 - `DNSHE_DOMAINS`
 
 ### Step 3: Configure Domains
@@ -68,7 +56,7 @@ abc88.cc.cd
 
 Open the `Actions` tab and manually run `DNSHE Auto Renew`.
 
-The first run checks the domains and generates `state/domains-state.json`. After that, the workflow runs automatically every week.
+The first run checks the domains. After that, the workflow runs automatically every week.
 
 ## Domain Management
 
@@ -84,13 +72,12 @@ abc88.cc.cd
 
 ### Adding Domains
 
-Simply append new domains to `DNSHE_DOMAINS`. The next workflow run will automatically detect new domains, fetch their `created_at` from the DNSHE API, calculate the initial expiration date (`created_at + 365` days), and save the result to `state/domains-state.json`. No manual registration date or expiration date needed.
+Simply append new domains to `DNSHE_DOMAINS`. The next workflow run will automatically detect new domains, fetch their `created_at` from the DNSHE API, and calculate the initial expiration date (`created_at + 365` days). No manual registration date or expiration date needed.
 
 ### Why No Manual Expiration Date
 
-- On first discovery, the initial expiration is calculated as `created_at + 365` days
-- After a successful renewal, the state is updated with the `new_expires_at` from the API response
-- Expiration rolls forward automatically — no need to update dates every year
+- On each run, the expiration is calculated as `created_at + 365` days
+- No manual registration date or expiration date needed
 
 ## Renewal Rules
 
@@ -115,7 +102,6 @@ Edit the `cron` field in `.github/workflows/dnshe-auto-renew.yml`. Currently run
 
 - `scripts/dnshe_auto_renew.py` — Renewal script
 - `.github/workflows/dnshe-auto-renew.yml` — Weekly GitHub Actions workflow
-- `state/domains-state.json` — Auto-generated state file
 
 ## Official Links
 

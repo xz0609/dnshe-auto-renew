@@ -7,8 +7,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 
 DATE_FORMAT = "%Y-%m-%d %H:%M"
@@ -72,7 +71,6 @@ class DNSHEClient:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Weekly DNSHE domain renewal helper.")
-    parser.add_argument("--state", default="state/domains-state.json", help="Path to state JSON file.")
     parser.add_argument("--dry-run", action="store_true", help="Evaluate and log actions without renewing.")
     return parser.parse_args()
 
@@ -102,17 +100,6 @@ def parse_domain_variable() -> List[str]:
     return domains
 
 
-def load_state(path: Path) -> Dict[str, Any]:
-    if not path.exists():
-        return {"domains": {}}
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def save_state(path: Path, raw_state: Dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(raw_state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-
 def find_subdomain_map(items: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     mapping: Dict[str, Dict[str, Any]] = {}
     for item in items:
@@ -126,65 +113,35 @@ def derive_initial_expiration(created_at: str) -> datetime:
     return parse_datetime(created_at) + timedelta(days=365)
 
 
-def build_managed_domains(domain_names: List[str], subdomain_map: Dict[str, Dict[str, Any]], state: Dict[str, Any]) -> Tuple[List[ManagedDomain], bool]:
+DEFAULT_RENEW_BEFORE_DAYS = 175
+
+
+def build_managed_domains(domain_names: List[str], subdomain_map: Dict[str, Dict[str, Any]]) -> List[ManagedDomain]:
     managed: List[ManagedDomain] = []
-    state_changed = False
-    stored_domains = state.setdefault("domains", {})
 
     for domain_name in domain_names:
         matched = subdomain_map.get(domain_name)
         if not matched:
             raise RuntimeError(f"Domain not found in DNSHE account: {domain_name}")
 
-        item = stored_domains.get(domain_name, {})
-        expires_at = item.get("expires_at")
-        if expires_at:
-            expires_dt = parse_datetime(expires_at)
-        else:
-            created_at = matched.get("created_at")
-            if not created_at:
-                raise RuntimeError(f"DNSHE response missing created_at for {domain_name}")
-            expires_dt = derive_initial_expiration(created_at)
-            item = {
-                "expires_at": expires_dt.strftime(DATE_FORMAT),
-                "renew_before_days": int(item.get("renew_before_days", 175)),
-                "source": "created_at_plus_365_days",
-            }
-            stored_domains[domain_name] = item
-            state_changed = True
+        created_at = matched.get("created_at")
+        if not created_at:
+            raise RuntimeError(f"DNSHE response missing created_at for {domain_name}")
+        expires_dt = derive_initial_expiration(created_at)
 
-        renew_before_days = int(item.get("renew_before_days", 175))
-        item["renew_before_days"] = renew_before_days
         managed.append(
             ManagedDomain(
                 domain=domain_name,
                 expires_at=expires_dt,
-                renew_before_days=renew_before_days,
+                renew_before_days=DEFAULT_RENEW_BEFORE_DAYS,
             )
         )
 
-    active_domains = set(domain_names)
-    stale_domains = [name for name in list(stored_domains.keys()) if name not in active_domains]
-    for name in stale_domains:
-        del stored_domains[name]
-        state_changed = True
-
-    return managed, state_changed
-
-
-def update_state_expiration(state: Dict[str, Any], domain_name: str, new_expires_at: str) -> bool:
-    item = state.setdefault("domains", {}).setdefault(domain_name, {})
-    if item.get("expires_at") == new_expires_at:
-        return False
-    item["expires_at"] = new_expires_at
-    item["source"] = "dnshe_renew_response"
-    item["renew_before_days"] = int(item.get("renew_before_days", 175))
-    return True
+    return managed
 
 
 def main() -> int:
     args = parse_args()
-    state_path = Path(args.state).resolve()
 
     api_key = require_env("DNSHE_API_KEY")
     api_secret = require_env("DNSHE_API_SECRET")
@@ -192,9 +149,8 @@ def main() -> int:
     client = DNSHEClient(api_key, api_secret)
 
     now = datetime.now(timezone.utc)
-    state = load_state(state_path)
     subdomain_map = find_subdomain_map(client.list_subdomains())
-    managed_domains, updated = build_managed_domains(domain_names, subdomain_map, state)
+    managed_domains = build_managed_domains(domain_names, subdomain_map)
 
     renewed_count = 0
 
@@ -219,17 +175,11 @@ def main() -> int:
         if not new_expires_at:
             raise RuntimeError(f"Renew response missing new_expires_at for {managed.domain}: {result}")
 
-        changed = update_state_expiration(state, managed.domain, new_expires_at)
-        updated = updated or changed
         renewed_count += 1
         print(
             f"[RENEWED] {managed.domain} previous_expires_at={result.get('previous_expires_at')} "
             f"new_expires_at={new_expires_at} remaining_days={result.get('remaining_days')}"
         )
-
-    if updated and not args.dry_run:
-        save_state(state_path, state)
-        print(f"[WRITE] Updated {state_path}")
 
     if renewed_count == 0:
         print("[DONE] No domains were renewed in this run.")
